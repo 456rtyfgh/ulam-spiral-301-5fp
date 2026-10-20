@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ulam Spiral</title>
+<style>
+  :root { color-scheme: dark; --ink:#e9e6df; --bg:#101014; --dim:#7c7768; --accent:#66d9a0; }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
+       display:flex;flex-direction:column;align-items:center;padding:24px 16px;gap:14px}
+  h1{margin:0;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  p{margin:0;max-width:660px;color:var(--dim);font-size:12.5px;text-align:center}
+  canvas{image-rendering:pixelated;width:100%;max-width:620px;border:1px solid #2a2a31;background:#08080b;cursor:crosshair}
+  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:center;max-width:620px;width:100%}
+  label{display:flex;align-items:center;gap:8px}
+  input[type=range]{accent-color:var(--accent)}
+  output{min-width:4ch;color:var(--accent)}
+  #readout{min-height:1.6em;color:var(--accent);font-size:12.5px}
+</style>
+</head>
+<body>
+  <h1>Ulam Spiral</h1>
+  <p>Write the integers in a square spiral and mark the primes. They refuse to scatter &mdash;
+     they pile onto diagonals, which are the values of quadratics like n&sup2; + n + 41.</p>
+  <div class="controls">
+    <label>size <input id="size" type="range" min="51" max="501" step="10" value="301"><output id="sizeOut">301</output></label>
+    <label><input id="twin" type="checkbox"> twin primes only</label>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="readout">hover the grid</div>
+<script>
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var sizeEl = document.getElementById('size');
+  var sizeOut = document.getElementById('sizeOut');
+  var twinEl = document.getElementById('twin');
+  var readout = document.getElementById('readout');
+  var state = { n: 0, sieve: null, coords: null };
+
+  // 에라토스테네스의 체. n 까지 한 번에 걸러 둔다.
+  function sieveUpTo(n) {
+    var flags = new Uint8Array(n + 1);
+    flags[0] = flags[1] = 1;
+    for (var i = 2; i * i <= n; i++) {
+      if (flags[i]) continue;
+      for (var j = i * i; j <= n; j += i) flags[j] = 1;
+    }
+    return flags;
+  }
+
+  // 1 을 가운데 두고 바깥으로 감는 정사각 나선. 각 정수의 (x,y) 를 미리 계산한다.
+  function spiral(size) {
+    var total = size * size;
+    var xs = new Int16Array(total + 1);
+    var ys = new Int16Array(total + 1);
+    var x = Math.floor(size / 2), y = Math.floor(size / 2);
+    var dx = 1, dy = 0, run = 1, n = 1;
+    xs[1] = x; ys[1] = y;
+    while (n < total) {
+      for (var twice = 0; twice < 2 && n < total; twice++) {
+        for (var s = 0; s < run && n < total; s++) {
+          x += dx; y += dy; n++;
+          xs[n] = x; ys[n] = y;
+        }
+        var t = dx; dx = dy; dy = -t; // 왼쪽으로 90도
+      }
+      run++;
+    }
+    return { xs: xs, ys: ys };
+  }
+
+  function draw() {
+    var size = Number(sizeEl.value);
+    if (size % 2 === 0) size++;
+    sizeOut.textContent = size;
+    var total = size * size;
+
+    var sieve = sieveUpTo(total);
+    var co = spiral(size);
+    state = { n: size, sieve: sieve, coords: co };
+
+    canvas.width = size;
+    canvas.height = size;
+    var img = ctx.createImageData(size, size);
+    for (var i = 0; i < img.data.length; i += 4) {
+      img.data[i] = 8; img.data[i + 1] = 8; img.data[i + 2] = 11; img.data[i + 3] = 255;
+    }
+
+    var twinOnly = twinEl.checked;
+    var marked = 0;
+    for (var v = 2; v <= total; v++) {
+      if (sieve[v]) continue;
+      if (twinOnly) {
+        var hasTwin = (v >= 2 && v - 2 >= 0 && !sieve[v - 2]) || (v + 2 <= total && !sieve[v + 2]);
+        if (!hasTwin) continue;
+      }
+      var p = (co.ys[v] * size + co.xs[v]) * 4;
+      img.data[p] = 102; img.data[p + 1] = 217; img.data[p + 2] = 160;
+      marked++;
+    }
+    ctx.putImageData(img, 0, 0);
+    readout.textContent = marked + ' marked of ' + total + ' integers';
+  }
+
+  canvas.addEventListener('mousemove', function (e) {
+    if (!state.coords) return;
+    var r = canvas.getBoundingClientRect();
+    var gx = Math.floor((e.clientX - r.left) / r.width * state.n);
+    var gy = Math.floor((e.clientY - r.top) / r.height * state.n);
+    for (var v = 1; v <= state.n * state.n; v++) {
+      if (state.coords.xs[v] === gx && state.coords.ys[v] === gy) {
+        readout.textContent = v + (state.sieve[v] ? ' — composite' : ' — prime');
+        return;
+      }
+    }
+  });
+
+  sizeEl.addEventListener('input', draw);
+  twinEl.addEventListener('change', draw);
+  draw();
+</script>
+</body>
+</html>
